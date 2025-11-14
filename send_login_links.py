@@ -11,14 +11,10 @@ from urllib.parse import quote
 # 1. SMTP Server Settings (for sending email)
 # Ask your email provider (e.g., Gmail, Outlook) for these details.
 # For Gmail, you might need to create an "App Password".
-SMTP_HOST = 'smtp.gmail.com'  # e.g., 'smtp.gmail.com' for Gmail
+SMTP_HOST = 'smtp.office365.com'  # e.g., 'smtp.gmail.com' for Gmail
 SMTP_PORT = 587  # e.g., 587 for TLS
-SMTP_USERNAME = 'krithikakash02@gmail.com'  # Your full email address
-SMTP_PASSWORD = 'nrsj mkxp pysp haei'    # Your email password or App Password
-
-# 2. Email Details
-EMAIL_SENDER = 'Akash krithik LMS ADMIN'
-EMAIL_SUBJECT = 'Your Login Link for the LMS Platform'
+SMTP_USERNAME = 'akash@ssfglobal.org'  # Your full email address
+SMTP_PASSWORD = 'vjbkrqncgsxfmzcl'    # Your email password or App Password
 
 # 3. Data File and Column Names
 DATA_FILE = 'students.csv'
@@ -31,21 +27,7 @@ LMS_LOGIN_URL = 'https://lms.siddhantaknowledge.org/login/index.php'
 # 5. HTML Email Template
 # You can customize this HTML template as you wish.
 HTML_TEMPLATE = """
-<html>
-<head></head>
-<body>
-    <p>Hello {user_name},</p>
-    <p>Welcome to our LMS platform! We are excited to have you onboard.</p>
-    <p>To make your first login easy, please click the link below. It will take you to the login page and pre-fill your email address.</p>
-    <p style="text-align: center;">
-        <a href="{login_link}" style="background-color: #4CAF50; color: white; padding: 14px 25px; text-align: center; text-decoration: none; display: inline-block; border-radius: 8px; font-size: 16px;">
-            Go to Login Page
-        </a>
-    </p>
-    <p>If you have any questions, please don't hesitate to contact our support team.</p>
-    <p>Best regards,<br>The Admin Team</p>
-</body>
-</html>
+<p>Hello {user_name},</p><p>Welcome to our LMS platform! We are excited to have you onboard.</p><p>To make your first login easy, please click the link below. It will take you to the login page and pre-fill your email address.</p><p class="ql-align-center"><a href="{login_link}" rel="noopener noreferrer" target="_blank" style="color: white; background-color: rgb(76, 175, 80);"> Go to Login Page </a></p><p>If you have any questions, please don't hesitate to contact our support team.</p><p>Best regards,</p><p>The Admin Team</p>
 """
 
 def send_email(recipient_name, recipient_email, login_link):
@@ -81,6 +63,11 @@ def main():
         print("Please open the 'send_login_links.py' script and fill in your SMTP server settings (username, password, etc.) in the CONFIGURATION section before running.")
         return
 
+    # --- Get Email Details from User ---
+    print("\nPlease provide the details for the emails to be sent.")
+    email_sender = input("Enter the sender's name (e.g., 'Your Name LMS Admin'): ")
+    email_subject = input("Enter the email subject: ")
+
     try:
         # Read the student data from the CSV file
         df = pd.read_csv(DATA_FILE)
@@ -107,7 +94,7 @@ def main():
         prepopulating_url = f"{LMS_LOGIN_URL}?username={encoded_email}"
 
         # Send the email
-        send_email(user_name, user_email, prepopulating_url)
+        send_email(user_name, user_email, prepopulating_url, email_sender, email_subject)
 
     print("\nScript finished.")
 
