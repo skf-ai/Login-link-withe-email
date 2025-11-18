@@ -27,18 +27,8 @@ app.add_middleware(
 
 # ----------- In-memory Storage -----------
 store = {
-    "template": """
-<p>Hello {Name},</p>
-<p>Welcome to our LMS platform! We are excited to have you onboard.</p>
-<p>To make your first login easy, please click the link below. It will take you to the login page and pre-fill your email address.</p>
-<p class="ql-align-center">
-  <a href="{login_link}" rel="noopener noreferrer" target="_blank" style="color: white; background-color: rgb(76, 175, 80); padding: 8px 12px; text-decoration:none; border-radius:4px;">Go to Login Page</a>
-</p>
-<p>If you have any questions, please don't hesitate to contact our support team.</p>
-<p>Best regards,</p>
-<p>The Admin Team</p>
-""",
-    "students_df": None
+    "students_df": None,
+    "email_column_name": None,
 }
 
 # ----------- Models -----------
@@ -52,6 +42,29 @@ class SendEmailsRequest(BaseModel):
 
 class Template(BaseModel):
     template: str
+
+# ----------- File Storage Configuration -----------
+TEMPLATE_FILE = "email_template.txt"
+
+def load_template_from_file() -> str:
+    try:
+        with open(TEMPLATE_FILE, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        # Provide a default template if not present
+        return """<p>Hello {Name},</p>
+<p>Welcome to our LMS platform! We are excited to have you onboard.</p>
+<p>To make your first login easy, please click the link below. It will take you to the login page and pre-fill your email address.</p>
+<p class="ql-align-center">
+  <a href="{login_link}" rel="noopener noreferrer" target="_blank" style="color: white; background-color: rgb(76, 175, 80); padding: 8px 12px; text-decoration:none; border-radius:4px;">Go to Login Page</a>
+</p>
+<p>If you have any questions, please don't hesitate to contact our support team.</p>
+<p>Best regards,</p>
+<p>The Admin Team</p>"""
+
+def save_template_to_file(template: str):
+    with open(TEMPLATE_FILE, "w") as f:
+        f.write(template)
 
 # ----------- Helpers -----------
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -103,30 +116,38 @@ async def upload_file(file: UploadFile = File(...)):
 
     store["students_df"] = df
     store["email_column_name"] = original_email_column
-    
     return {"status": "ok", "filename": file.filename, "rows": len(df)}
 
 @app.get("/template")
 async def get_template():
-    return {"template": store["template"]}
+    template = load_template_from_file()
+    return {"template": template}
 
 @app.post("/template")
 async def save_template(template: Template):
-    store["template"] = template.template
+    save_template_to_file(template.template)
     return {"status": "ok"}
 
 def get_smtp_config() -> Dict[str, Any]:
-    smtp_host = os.getenv("SMTP_HOST", "smtp.office365.com")
-    smtp_port = int(os.getenv("SMTP_PORT", 587))
-    smtp_username = os.getenv("SMTP_USERNAME", "akash@ssfglobal.org")
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port_str = os.getenv("SMTP_PORT")
+    smtp_username = os.getenv("SMTP_USERNAME")
     smtp_password = os.getenv("SMTP_PASSWORD")
-
-    if not smtp_password:
-        raise HTTPException(status_code=500, detail="SMTP_PASSWORD environment variable not set.")
+    # Validate presence
+    if not all([smtp_host, smtp_port_str, smtp_username, smtp_password]):
+        missing = []
+        if not smtp_host: missing.append("SMTP_HOST")
+        if not smtp_port_str: missing.append("SMTP_PORT")
+        if not smtp_username: missing.append("SMTP_USERNAME")
+        if not smtp_password: missing.append("SMTP_PASSWORD")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Missing required SMTP environment variables: {', '.join(missing)}. Please check your .env file."
+        )
 
     return {
         "host": smtp_host,
-        "port": smtp_port,
+        "port": int(smtp_port_str),
         "username": smtp_username,
         "password": smtp_password,
     }
@@ -140,7 +161,6 @@ async def send_emails(payload: SendEmailsRequest):
     smtp_config = get_smtp_config()
     results = {"sent": 0, "failed": 0, "errors": []}
 
-    # Sender is a display name only; pair it with SMTP username
     final_sender_name = (payload.sender or os.getenv("SMTP_SENDER_NAME", "LMS Team")).strip()
     final_subject = (payload.subject or os.getenv("SMTP_SUBJECT", "Your Login Link for the LMS Platform")).strip()
     formatted_from = formataddr((final_sender_name, smtp_config["username"]))
@@ -166,9 +186,6 @@ async def send_emails(payload: SendEmailsRequest):
         msg['From'] = formatted_from
         msg['To'] = str(user_email)
         msg['Subject'] = final_subject
-        # Optional: make replies go to SMTP inbox (same as envelope)
-        # msg['Reply-To'] = smtp_config["username"]
-
         # Fill template
         format_data = row.to_dict()
         format_data['login_link'] = login_link
@@ -184,7 +201,6 @@ async def send_emails(payload: SendEmailsRequest):
         msg.attach(MIMEText(html_body, 'html'))
 
         try:
-            # Use authenticated address as envelope sender
             server.sendmail(smtp_config["username"], [str(user_email)], msg.as_string())
             results["sent"] += 1
         except Exception as e:
@@ -193,3 +209,9 @@ async def send_emails(payload: SendEmailsRequest):
 
     server.quit()
     return {"status": "ok", "results": results}
+
+# ----------- Startup Event -----------
+@app.on_event("startup")
+async def startup_event():
+    # No template loaded to store; templates handled via file
+    pass
